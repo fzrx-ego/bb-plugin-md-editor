@@ -181,6 +181,7 @@ test("a late preview response cannot replace the next document's image base", as
     assert.equal(img?.src, "https://bb.test/new/assets/a.png");
   } finally { rpc.call = previousCall; await act(async () => root.unmount()); el.remove(); }
 });
+
 test("standard preview docks Edit in the host header and returns to Markdown PRO", async () => {
   const { el, root } = host();
   const previousCall = rpc.call;
@@ -243,5 +244,22 @@ test("the actions menu opens the standard preview for a loaded document", async 
     await click(button(el, t("edit")));
     assert.ok(el.querySelector(".mdpro-editor"));
     assert.equal(el.querySelector(".mdpro-prose")?.getAttribute("contenteditable"), "true");
+  } finally { await act(async () => root.unmount()); el.remove(); }
+});
+
+test("native Windows links survive the rich editor URI validation and click handling", async () => {
+  const { el, root } = host();
+  const received: string[] = [];
+  const markdown = '[drive](<C:\\Project\\a.md>) [forward](C:/Project/b.md) [unc](<\\\\\\\\server\\share\\c.md>) [unsafe](javascript:alert)';
+  const props = { initialMarkdown: markdown, editable: false, showToolbar: false, resolveAsset: { current: (src: string) => src }, onReady() {}, onChange() {}, onLink: (href: string) => { received.push(href); return true; }, onThread() {}, onQuote() {}, onReference() {}, onEditMath() {}, onEditLink() {} };
+  try {
+    await act(async () => root.render(createElement(RichMarkdownEditor, props)));
+    await flush();
+    for (const label of ['drive', 'forward', 'unc']) {
+      const anchor = Array.from(el.querySelectorAll('a')).find(a => a.textContent === label);
+      await click(anchor ?? null);
+    }
+    assert.deepEqual(received, ['C:\\Project\\a.md', 'C:/Project/b.md', '\\\\server\\share\\c.md']);
+    assert.equal(el.querySelector('a[href^="javascript:"]'), null);
   } finally { await act(async () => root.unmount()); el.remove(); }
 });
